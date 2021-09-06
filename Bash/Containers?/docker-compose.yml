@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  manager:
+    build:
+      context: ./SSH_Container
+      dockerfile: ./Dockerfile
+    image: manager_cap
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "0.0.0.0:10000:1234"
+#    restart: unless-stopped
+    container_name: manager_cap

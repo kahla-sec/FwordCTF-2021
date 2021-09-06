@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  ctfd:
+    image: kahlasec/ctfd_fwordctf
+    build: .
+    user: root
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - UPLOAD_PROVIDER=s3
+      - SECRET_KEY=FworDFtWIsTh3BeStOkaYBBCVdffz25Blablabla
+      - AWS_ACCESS_KEY_ID=###REDACTED###
+      - AWS_SECRET_ACCESS_KEY=###REDACTED###
+      - AWS_SESSION_TOKEN=###REDACTED###
+      - AWS_S3_BUCKET=static.fword.tech
+      - DATABASE_URL=mysql+pymysql://ctfd:PASSWORD@IP/ctfd
+      - REDIS_URL=redis://cache:6379
+      - WORKERS=5
+      - LOG_FOLDER=/var/log/CTFd
+      - SQLALCHEMY_MAX_OVERFLOW=800
+      - SQLALCHEMY_POOL_PRE_PING=True
+      - ACCESS_LOG=-
+      - ERROR_LOG=-
+      - REVERSE_PROXY=true
+#    volumes:
+#      - /logs:/var/log/CTFd
+#      - /opt/CTFd:/opt/CTFd:ro
+    deploy:
+      replicas: 8
+      placement:
+        max_replicas_per_node: 4
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.ctfd.rule=Host(`INTERNAL IP Server1`) || Host(`INTERNAL IP Server2`) || Host(`PUBLIC IP LB`) || Host(`ctf.fword.tech`)"
+        - "traefik.http.routers.ctfd.entrypoints=web"
+        - "traefik.http.services.ctfd.loadbalancer.server.port=8000"
+        - "traefik.http.services.ctfd.loadbalancer.sticky=true"
+        - "traefik.http.services.ctfd.loadbalancer.sticky.cookie.name=StickyCookie"
+    networks:
+        net:
+
+  loadbalancer:
+    image: traefik
+    command: 
+      - "--log.level=ERROR"
+      - "--api.insecure=true"
+      - "--providers.docker.swarmMode=true"
+      - "--providers.docker.network=ctfd_net"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - 80:80
+      - 9000:8080
+      - 5000:5000
+    deploy:
+      restart_policy:
+        condition: any
+      mode: replicated
+      placement:
+        constraints:
+          - "node.role==manager"
+#         max_replicas_per_node: 1
+      replicas: 1
+      update_config:
+        delay: 2s
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+        net:
+
+  cache:
+    image: redis:4
+    restart: always 
+    deploy:
+      restart_policy:
+        condition: any
+      placement:
+        constraints:
+          - "node.role==worker"
+#    volumes:
+#      - .data/redis:/data 
+    networks:
+        net:
+
+
+networks:
+    default:
+    internal:
+        internal: true
+    net:
